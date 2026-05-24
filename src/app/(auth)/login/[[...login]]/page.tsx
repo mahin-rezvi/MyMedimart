@@ -27,6 +27,7 @@ export default function LoginPage() {
 
       {/* Clerk SignIn Component */}
       <SignIn
+        path="/login"
         signUpUrl="/register"
         fallbackRedirectUrl="/"
         appearance={{
