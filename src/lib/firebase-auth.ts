@@ -120,6 +120,21 @@ export { onAuthStateChanged };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 async function ensureUserDoc(user: User, displayName?: string): Promise<void> {
+  // Sync to Neon PostgreSQL (non-blocking)
+  try {
+    await fetch("/api/auth/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: user.uid,
+        email: user.email,
+        displayName: displayName ?? user.displayName,
+      }),
+    });
+  } catch (err) {
+    console.warn("[firebase-auth] Failed to sync user to Neon:", err);
+  }
+
   if (!db) {
     console.warn("[firebase-auth] Firestore is not available. Skipping user profile creation.");
     return;

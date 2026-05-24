@@ -1,12 +1,15 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { type User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db, FIREBASE_CONFIGURED } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "@/lib/firebase-auth";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useUser, useClerk } from "@clerk/nextjs";
 
-interface AuthUser extends User {
+interface AuthUser {
+  uid: string;
+  email?: string | null;
+  name?: string | null;
+  displayName?: string | null;
+  phoneNumber?: string | null;
+  photoURL?: string | null;
   role?: string;
 }
 
@@ -17,57 +20,80 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  isAdmin: false,
-  signOut: async () => {},
-});
+const AuthContext = createContext<AuthContextType>(
+  {
+    user: null,
+    loading: true,
+    isAdmin: false,
+    signOut: async () => {},
+  }
+);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(!auth ? false : true);
+  const { user: clerkUser, isLoaded, isSignedIn } = useUser();
+  const { signOut } = useClerk();
+  const [role, setRole] = useState("CUSTOMER");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth) {
-      console.warn("[AuthProvider] Firebase Auth not initialized. Auth features disabled. Check environment variables.");
+    if (!isLoaded) return;
+
+    if (!isSignedIn || !clerkUser) {
+      setRole("CUSTOMER");
+      setLoading(false);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const token = await firebaseUser.getIdToken();
-        document.cookie = `__session=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax`;
-
-        // Fetch role from Firestore if configured; otherwise default to CUSTOMER
-        try {
-          if (FIREBASE_CONFIGURED && db) {
-            const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-            const role = snap.exists() ? snap.data().role : "CUSTOMER";
-            setUser({ ...firebaseUser, role });
-          } else {
-            setUser({ ...firebaseUser, role: "CUSTOMER" });
-          }
-        } catch (err) {
-          // If Firestore fails, don't block auth — fallback to CUSTOMER
-          console.warn("[auth-provider] Failed to read user role:", err);
-          setUser({ ...firebaseUser, role: "CUSTOMER" });
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch("/api/auth/profile");
+        if (response.ok) {
+          const data = await response.json();
+          setRole(data.role || "CUSTOMER");
+        } else {
+          setRole("CUSTOMER");
         }
-      } else {
-        document.cookie = "__session=; Path=/; Max-Age=0; SameSite=Lax";
-        setUser(null);
+      } catch (err) {
+        console.warn("[AuthProvider] Failed to load profile:", err);
+        setRole("CUSTOMER");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
+    };
+
+    fetchProfile();
+  }, [isLoaded, isSignedIn, clerkUser]);
+
+  const authUser = useMemo(() => {
+    if (!isLoaded || !isSignedIn || !clerkUser) return null;
+
+    const email = clerkUser.primaryEmailAddress?.emailAddress
+      ?? clerkUser.emailAddresses?.[0]?.emailAddress
+      ?? null;
+    const displayName = clerkUser.fullName
+      ?? [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ")
+      ?? null;
+    const photoURL = clerkUser.imageUrl ?? null;
+
+    const phoneNumber = clerkUser.phoneNumbers?.[0]?.phoneNumber ?? null;
+
+    return {
+      uid: clerkUser.id,
+      email,
+      name: displayName,
+      displayName,
+      phoneNumber,
+      photoURL,
+      role,
+    };
+  }, [isLoaded, isSignedIn, clerkUser, role]);
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        loading,
-        isAdmin: user?.role === "ADMIN" || user?.role === "SUPER_ADMIN",
+        user: authUser,
+        loading: !isLoaded || loading,
+        isAdmin: authUser?.role === "ADMIN" || authUser?.role === "SUPER_ADMIN",
         signOut,
       }}
     >

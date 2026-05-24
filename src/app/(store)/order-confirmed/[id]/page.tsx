@@ -1,24 +1,8 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CheckCircle, Download, Package, Truck, Home } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
-
-const MOCK_ORDER = {
-  id: "ord_123",
-  orderNumber: "MM-ABC123-XYZ",
-  invoiceNo: "INV-2512-45231",
-  status: "CONFIRMED",
-  paymentMethod: "COD",
-  subtotal: 147997,
-  shippingCost: 80,
-  totalAmount: 148077,
-  createdAt: new Date().toISOString(),
-  customer: { name: "Rahim Ahmed", phone: "01781452943", email: "rahim@example.com" },
-  address: { street: "12/A, Mirpur Road", area: "Mirpur-10", city: "Dhaka" },
-  items: [
-    { name: "Samsung Galaxy S24 Ultra", variant: "256GB", qty: 1, price: 129999 },
-    { name: "JBL Flip 6 Speaker", variant: null, qty: 2, price: 8999 },
-  ],
-};
+import { ordersRepo } from "@/lib/db/repositories";
 
 const TIMELINE = [
   { label: "Order Placed", done: true, icon: CheckCircle },
@@ -28,8 +12,30 @@ const TIMELINE = [
 ];
 
 export default async function OrderConfirmedPage({ params }: { params: Promise<{ id: string }> }) {
-  const order = MOCK_ORDER;
   const { id: orderId } = await params;
+  const order = await ordersRepo.getById(orderId);
+
+  if (!order) {
+    notFound();
+  }
+
+  const shippingAddress = order.shipping_address ?? {};
+  const customer = {
+    name: shippingAddress.fullName ?? "Customer",
+    phone: shippingAddress.phone ?? "",
+    email: shippingAddress.email ?? "",
+  };
+  const address = {
+    street: shippingAddress.street ?? "",
+    area: shippingAddress.area ?? "",
+    city: shippingAddress.city ?? "",
+  };
+  const orderNumber = shippingAddress.orderNumber ?? String(order.id).slice(0, 8).toUpperCase();
+  const paymentMethod = shippingAddress.paymentMethod ?? "Cash on Delivery";
+  const shippingCost = Number(shippingAddress.shippingCost ?? 0);
+  const totalAmount = Number(order.total_price ?? 0);
+  const subtotal = totalAmount - shippingCost;
+  const items = Array.isArray(order.items) ? order.items : [];
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
@@ -40,10 +46,13 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
         </div>
         <h1 className="font-display text-3xl font-bold text-foreground mb-2">Order Confirmed! 🎉</h1>
         <p className="text-muted-foreground">
-          Thank you <strong>{order.customer.name}</strong>! Your order <strong>{orderId}</strong> has been placed successfully.
+          Thank you <strong>{customer.name}</strong>! Your order <strong>{orderNumber}</strong> has been placed successfully.
+        </p>
+        <p className="text-muted-foreground text-sm mt-2">
+          A copy of your invoice has been emailed to <strong>{customer.email}</strong> and the store owner.
         </p>
         <div className="mt-4 inline-flex flex-col sm:flex-row gap-2 items-center justify-center">
-          <span className="bg-muted px-4 py-2 rounded-xl text-sm font-mono font-bold">{order.orderNumber}</span>
+          <span className="bg-muted px-4 py-2 rounded-xl text-sm font-mono font-bold">{orderNumber}</span>
           <span className="text-muted-foreground text-sm">•</span>
           <span className="text-muted-foreground text-sm">Order ID: <strong>{orderId}</strong></span>
         </div>
@@ -88,7 +97,7 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
           <h2 className="font-semibold">Order Details</h2>
         </div>
         <div className="p-5 space-y-3">
-          {order.items.map((item, i) => (
+          {items.map((item, i) => (
             <div key={i} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{item.name} {item.variant && `(${item.variant})`} ×{item.qty}</span>
               <span className="font-medium">{formatPrice(item.price * item.qty)}</span>
@@ -97,11 +106,15 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
           <div className="border-t border-border pt-3 space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
-              <span>{formatPrice(order.shippingCost)}</span>
+              <span>{formatPrice(shippingCost)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{formatPrice(subtotal)}</span>
             </div>
             <div className="flex justify-between font-bold text-base">
               <span>Total Paid</span>
-              <span className="text-brand-700 dark:text-brand-400">{formatPrice(order.totalAmount)}</span>
+              <span className="text-brand-700 dark:text-brand-400">{formatPrice(totalAmount)}</span>
             </div>
           </div>
         </div>
@@ -110,14 +123,14 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
         <div className="bg-muted/50 p-5 border-t border-border grid sm:grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold tracking-wide">Delivery Address</p>
-            <p className="font-medium">{order.customer.name}</p>
-            <p className="text-muted-foreground">{order.address.street}</p>
-            <p className="text-muted-foreground">{order.address.area}, {order.address.city}</p>
-            <p className="text-muted-foreground">{order.customer.phone}</p>
+            <p className="font-medium">{customer.name}</p>
+            <p className="text-muted-foreground">{address.street}</p>
+            <p className="text-muted-foreground">{address.area}{address.area && address.city ? ", " : ""}{address.city}</p>
+            <p className="text-muted-foreground">{customer.phone}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold tracking-wide">Payment</p>
-            <p className="font-medium">{order.paymentMethod === "COD" ? "Cash on Delivery" : order.paymentMethod}</p>
+            <p className="font-medium">{paymentMethod === "COD" ? "Cash on Delivery" : paymentMethod}</p>
             <p className="text-muted-foreground text-xs mt-1">Payment due on delivery</p>
           </div>
         </div>

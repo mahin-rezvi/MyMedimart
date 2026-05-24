@@ -6,13 +6,14 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Upload, Settings,
   Tag, Image as ImageIcon, Ticket, Menu, X, ChevronRight, Zap,
-  LogOut, Bell, Search, ExternalLink,
+  LogOut, Bell, Search, ExternalLink, Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "Resources", href: "/admin/resources", icon: Database },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Orders", href: "/admin/orders", icon: ShoppingCart },
   { label: "Customers", href: "/admin/users", icon: Users },

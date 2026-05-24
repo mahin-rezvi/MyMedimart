@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ─── Helper functions ────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'SUPER_ADMIN'];
+    }
+
+    function isUser(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isOwner(ownerId) {
+      return request.auth.uid == ownerId;
+    }
+
+    // ─── Users collection ────────────────────────────────────────────────
+    match /users/{userId} {
+      // Allow users to read their own profile
+      allow read: if isAuthenticated() && (isUser(userId) || isAdmin());
+      // Allow anyone to create their own profile during signup
+      allow create: if isAuthenticated() && isUser(userId);
+      // Allow users to update their own profile
+      allow update: if isAuthenticated() && (isUser(userId) || isAdmin());
+      // Allow admins to delete users
+      allow delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Products collection (public read, admin write) ──────────────────
+    match /products/{productId} {
+      // Allow anyone to read products
+      allow read: if true;
+      // Allow authenticated users to create (will be validated by requireAdmin on backend)
+      allow create: if isAuthenticated();
+      // Allow only admins to update or delete products
+      allow update, delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Categories collection (public read, admin write) ───────────────
+    match /categories/{categoryId} {
+      // Allow anyone to read categories
+      allow read: if true;
+      // Allow authenticated users to create (will be validated by requireAdmin on backend)
+      allow create: if isAuthenticated();
+      // Allow only admins to update or delete categories
+      allow update, delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Orders collection (user can read own, admin can read all) ──────
+    match /orders/{orderId} {
+      // Allow users to read their own orders
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+      // Allow authenticated users to create orders
+      allow create: if isAuthenticated();
+      // Allow admins to update or delete orders
+      allow update, delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Banners collection (public read, admin write) ──────────────────
+    match /banners/{bannerId} {
+      // Allow anyone to read banners
+      allow read: if true;
+      // Allow authenticated users to create (will be validated by requireAdmin on backend)
+      allow create: if isAuthenticated();
+      // Allow only admins to update or delete banners
+      allow update, delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Coupons collection (admin full access) ──────────────────────────
+    match /coupons/{couponId} {
+      // Allow only admins to read, create, update, or delete coupons
+      allow read, create, update, delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Newsletter collection (anyone can subscribe) ───────────────────
+    match /newsletter/{email} {
+      allow read: if isAuthenticated() && isAdmin();
+      allow create, update: if true;
+      allow delete: if isAuthenticated() && isAdmin();
+    }
+
+    // ─── Default deny all ────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { updateProfile } from "firebase/auth";
+import { useUser } from "@clerk/nextjs";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { ArrowLeft, Camera, Loader2, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ const EMPTY_FORM = {
 export default function AccountEditPage() {
   const router = useRouter();
   const { user, loading, isAdmin } = useAuth();
+  const { user: clerkUser } = useUser();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
@@ -72,10 +73,23 @@ export default function AccountEditPage() {
     }
     setSaving(true);
     try {
-      await updateProfile(user, {
-        displayName: form.displayName.trim(),
-        photoURL: form.photoURL.trim() || null,
-      });
+      if (clerkUser && typeof clerkUser.update === "function") {
+        await clerkUser.update({
+          firstName: form.displayName.trim(),
+          lastName: "",
+        });
+
+        if (form.photoURL.trim()) {
+          try {
+            // Clerk requires using setProfileImage to update the avatar
+            if (typeof clerkUser.setProfileImage === "function") {
+              await clerkUser.setProfileImage({ file: form.photoURL.trim() });
+            }
+          } catch (err) {
+            console.warn("[account/edit] clerk setProfileImage failed:", err);
+          }
+        }
+      }
 
       if (db) {
         try {
