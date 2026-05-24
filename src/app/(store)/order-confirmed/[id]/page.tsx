@@ -36,6 +36,8 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
   const totalAmount = Number(order.total_price ?? 0);
   const subtotal = totalAmount - shippingCost;
   const items = Array.isArray(order.items) ? order.items : [];
+  const emailSent = Boolean(shippingAddress.notificationStatus?.emailSent);
+  const whatsappSent = Boolean(shippingAddress.notificationStatus?.whatsappSent);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
@@ -48,9 +50,13 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
         <p className="text-muted-foreground">
           Thank you <strong>{customer.name}</strong>! Your order <strong>{orderNumber}</strong> has been placed successfully.
         </p>
-        <p className="text-muted-foreground text-sm mt-2">
-          A copy of your invoice has been emailed to <strong>{customer.email}</strong> and the store owner.
-        </p>
+        {customer.email && (
+          <p className="text-muted-foreground text-sm mt-2">
+            {emailSent
+              ? <>A copy of your invoice has been emailed to <strong>{customer.email}</strong>.</>
+              : <>Your invoice is ready to download. Email delivery is pending.</>}
+          </p>
+        )}
         <div className="mt-4 inline-flex flex-col sm:flex-row gap-2 items-center justify-center">
           <span className="bg-muted px-4 py-2 rounded-xl text-sm font-mono font-bold">{orderNumber}</span>
           <span className="text-muted-foreground text-sm">•</span>
@@ -59,12 +65,16 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
       </div>
 
       {/* WhatsApp Notice */}
-      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-4 mb-6 flex items-start gap-3">
+      <div className={`${whatsappSent ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"} border rounded-2xl p-4 mb-6 flex items-start gap-3`}>
         <span className="text-2xl">📱</span>
         <div>
-          <p className="font-semibold text-green-800 dark:text-green-400 text-sm">WhatsApp Confirmation Sent</p>
-          <p className="text-green-700 dark:text-green-500 text-xs mt-0.5">
-            Order details have been sent to our team via WhatsApp. We&apos;ll confirm within 30 minutes.
+          <p className={`${whatsappSent ? "text-green-800 dark:text-green-400" : "text-amber-800 dark:text-amber-400"} font-semibold text-sm`}>
+            {whatsappSent ? "WhatsApp Confirmation Sent" : "WhatsApp Confirmation Pending"}
+          </p>
+          <p className={`${whatsappSent ? "text-green-700 dark:text-green-500" : "text-amber-700 dark:text-amber-500"} text-xs mt-0.5`}>
+            {whatsappSent
+              ? "Order details have been sent to our team via WhatsApp. We'll confirm within 30 minutes."
+              : "Your order was saved, but WhatsApp delivery is not configured or failed. We will confirm it from the admin panel."}
           </p>
         </div>
       </div>

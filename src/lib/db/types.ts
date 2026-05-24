@@ -57,6 +57,10 @@ export interface ShippingAddress {
   totalAmount?: number;
   orderNumber?: string;
   invoiceNo?: string;
+  notificationStatus?: {
+    emailSent?: boolean;
+    whatsappSent?: boolean;
+  };
 }
 
 export interface Order {

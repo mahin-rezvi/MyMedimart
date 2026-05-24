@@ -103,8 +103,8 @@ export default function CheckoutPage() {
                 <input required value={form.phone} onChange={(e) => update("phone", e.target.value)} className="form-input" placeholder="01XXXXXXXXX" />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-sm font-medium mb-1 block">Email</label>
-                <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} className="form-input" placeholder="email@example.com" />
+                <label className="text-sm font-medium mb-1 block">Email *</label>
+                <input required type="email" value={form.email} onChange={(e) => update("email", e.target.value)} className="form-input" placeholder="email@example.com" />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium mb-1 block">Street Address *</label>

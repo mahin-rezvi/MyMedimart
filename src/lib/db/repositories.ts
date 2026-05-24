@@ -133,6 +133,14 @@ export const ordersRepo = {
     );
     return result as Order;
   },
+
+  async updateShippingAddress(id: string, shippingAddress: Order['shipping_address']): Promise<Order> {
+    const result = await queryOne<Order>(
+      'UPDATE orders SET shipping_address = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      [JSON.stringify(shippingAddress), new Date(), id]
+    );
+    return result as Order;
+  },
 };
 
 // Users Repository
