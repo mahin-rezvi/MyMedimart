@@ -8,11 +8,6 @@ import { db } from "@/lib/firebase";
 
 export const dynamic = "force-dynamic";
 
-const RECENT_ORDERS = [
-  { id: "MM-ABC123", date: "2025-05-13", total: 129999, status: "CONFIRMED", items: 1 },
-  { id: "MM-DEF456", date: "2025-05-10", total: 17998, status: "DELIVERED", items: 2 },
-];
-
 const STATUS_COLORS: Record<string, string> = {
   CONFIRMED: "status-confirmed",
   DELIVERED: "status-delivered",
@@ -30,9 +25,38 @@ interface ProfileDoc {
   marketingOptIn?: boolean;
 }
 
+interface RecentOrder {
+  id: string;
+  total_price?: number;
+  status: string;
+  items?: Array<{ qty?: number }>;
+  shipping_address?: { orderNumber?: string };
+  created_at?: string;
+}
+
+function getOrderNumber(order: RecentOrder) {
+  return order.shipping_address?.orderNumber ?? String(order.id).slice(0, 8).toUpperCase();
+}
+
+function getOrderItemCount(order: RecentOrder) {
+  return Array.isArray(order.items)
+    ? order.items.reduce((sum, item) => sum + Number(item.qty ?? 1), 0)
+    : 0;
+}
+
+function formatOrderDate(value?: string) {
+  if (!value) return "Date unavailable";
+  return new Date(value).toLocaleDateString("en-BD", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function AccountPage() {
   const { user, loading, isAdmin } = useAuth();
   const [profile, setProfile] = useState<ProfileDoc | null>(null);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -43,6 +67,25 @@ export default function AccountPage() {
 
     loadProfile().catch(() => setProfile(null));
   }, [user]);
+
+  useEffect(() => {
+    async function loadOrders() {
+      if (!user?.uid) {
+        setRecentOrders([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/orders?userId=${encodeURIComponent(user.uid)}&limit=3`);
+        const data = await res.json();
+        setRecentOrders(Array.isArray(data.orders) ? data.orders : []);
+      } catch {
+        setRecentOrders([]);
+      }
+    }
+
+    loadOrders();
+  }, [user?.uid]);
 
   const name = profile?.displayName || user?.displayName || "MediMart customer";
   const email = profile?.email || user?.email || "";
@@ -153,21 +196,25 @@ export default function AccountPage() {
             </Link>
           </div>
           <div className="divide-y divide-border">
-            {RECENT_ORDERS.map((order) => (
+            {recentOrders.length === 0 ? (
+              <div className="p-5">
+                <p className="text-sm text-muted-foreground">No recent orders yet.</p>
+              </div>
+            ) : recentOrders.map((order) => (
               <div key={order.id} className="flex items-center justify-between p-5">
                 <div>
-                  <p className="font-mono font-semibold text-sm">{order.id}</p>
+                  <p className="font-mono font-semibold text-sm">{getOrderNumber(order)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {order.date} · {order.items} item(s)
+                    {formatOrderDate(order.created_at)} · {getOrderItemCount(order)} item(s)
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
                   <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[order.status]}`}>
                     {order.status}
                   </span>
-                  <span className="font-bold">৳{order.total.toLocaleString()}</span>
-                  <Link href={`/account/orders/${order.id}`} className="text-xs text-brand-600 hover:underline">
-                    Details
+                  <span className="font-bold">৳{Number(order.total_price ?? 0).toLocaleString("en-BD")}</span>
+                  <Link href={`/api/invoice/${order.id}`} className="text-xs text-brand-600 hover:underline">
+                    Invoice
                   </Link>
                 </div>
               </div>

@@ -108,7 +108,14 @@ export const categoriesRepo = {
 
 // Orders Repository
 export const ordersRepo = {
-  async getByUserId(userId: string): Promise<Order[]> {
+  async getByUserId(userId: string, limit?: number): Promise<Order[]> {
+    if (limit) {
+      return queryAll<Order>(
+        'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+        [userId, limit]
+      );
+    }
+
     return queryAll<Order>('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
   },
 

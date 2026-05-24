@@ -125,12 +125,16 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
+    const rawLimit = Number(searchParams.get('limit') ?? 0);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), 50)
+      : undefined;
 
     if (!userId) {
       return NextResponse.json({ error: "userId parameter required" }, { status: 400 });
     }
 
-    const orders = await ordersRepo.getByUserId(userId);
+    const orders = await ordersRepo.getByUserId(userId, limit);
     return NextResponse.json({ orders, source: "neon" });
   } catch (error) {
     console.error('Orders GET error:', error);
