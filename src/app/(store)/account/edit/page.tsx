@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { ArrowLeft, Camera, Loader2, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
-import { db } from "@/lib/firebase";
 
 const EMPTY_FORM = {
   displayName: "",
@@ -20,12 +17,14 @@ const EMPTY_FORM = {
   dateOfBirth: "",
   gender: "",
   marketingOptIn: false,
+  orderUpdatesOptIn: true,
+  theme: "system",
+  language: "en",
 };
 
 export default function AccountEditPage() {
   const router = useRouter();
   const { user, loading, isAdmin } = useAuth();
-  const { user: clerkUser } = useUser();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
@@ -40,21 +39,23 @@ export default function AccountEditPage() {
         photoURL: user.photoURL ?? "",
       }));
 
-      if (!db) return;
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (!snap.exists()) return;
-
-      const data = snap.data();
+      const res = await fetch("/api/account/settings");
+      const data = await res.json();
+      if (!res.ok) return;
+      const settings = data.settings;
       setForm({
-        displayName: data.displayName ?? user.displayName ?? "",
-        phone: data.phone ?? user.phoneNumber ?? "",
-        photoURL: data.photoURL ?? user.photoURL ?? "",
-        defaultAddress: data.defaultAddress ?? "",
-        city: data.city ?? "",
-        postalCode: data.postalCode ?? "",
-        dateOfBirth: data.dateOfBirth ?? "",
-        gender: data.gender ?? "",
-        marketingOptIn: Boolean(data.marketingOptIn),
+        displayName: settings?.display_name ?? user.displayName ?? "",
+        phone: settings?.phone ?? user.phoneNumber ?? "",
+        photoURL: settings?.photo_url ?? user.photoURL ?? "",
+        defaultAddress: settings?.default_address ?? "",
+        city: settings?.city ?? "",
+        postalCode: settings?.postal_code ?? "",
+        dateOfBirth: settings?.date_of_birth ?? "",
+        gender: settings?.gender ?? "",
+        marketingOptIn: Boolean(settings?.marketing_opt_in),
+        orderUpdatesOptIn: settings?.order_updates_opt_in ?? true,
+        theme: settings?.theme ?? "system",
+        language: settings?.language ?? "en",
       });
     }
 
@@ -73,53 +74,26 @@ export default function AccountEditPage() {
     }
     setSaving(true);
     try {
-      if (clerkUser && typeof clerkUser.update === "function") {
-        await clerkUser.update({
-          firstName: form.displayName.trim(),
-          lastName: "",
-        });
-
-        if (form.photoURL.trim()) {
-          try {
-            // Clerk requires using setProfileImage to update the avatar
-            if (typeof clerkUser.setProfileImage === "function") {
-              await clerkUser.setProfileImage({ file: form.photoURL.trim() });
-            }
-          } catch (err) {
-            console.warn("[account/edit] clerk setProfileImage failed:", err);
-          }
-        }
-      }
-
-      if (db) {
-        try {
-          await setDoc(
-            doc(db, "users", user.uid),
-            {
-              uid: user.uid,
-              email: user.email ?? "",
-              displayName: form.displayName.trim(),
-              phone: form.phone.trim(),
-              photoURL: form.photoURL.trim(),
-              defaultAddress: form.defaultAddress.trim(),
-              city: form.city.trim(),
-              postalCode: form.postalCode.trim(),
-              dateOfBirth: form.dateOfBirth,
-              gender: form.gender,
-              marketingOptIn: form.marketingOptIn,
-              role: user.role ?? "CUSTOMER",
-              isActive: true,
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true }
-          );
-        } catch (err) {
-          console.warn("[account/edit] Firestore profile save skipped:", err);
-          toast.warning("Basic profile updated. Delivery details need Firestore to be saved.");
-        }
-      } else {
-        toast.warning("Basic profile updated. Delivery details need Firestore to be configured.");
-      }
+      const res = await fetch("/api/account/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: form.displayName.trim(),
+          phone: form.phone.trim(),
+          photoURL: form.photoURL.trim(),
+          defaultAddress: form.defaultAddress.trim(),
+          city: form.city.trim(),
+          postalCode: form.postalCode.trim(),
+          dateOfBirth: form.dateOfBirth,
+          gender: form.gender,
+          marketingOptIn: form.marketingOptIn,
+          orderUpdatesOptIn: form.orderUpdatesOptIn,
+          theme: form.theme,
+          language: form.language,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to save profile");
 
       toast.success("Profile updated");
       router.push("/account");
@@ -156,7 +130,7 @@ export default function AccountEditPage() {
           <div className="bg-card border border-border rounded-2xl p-6">
             <h2 className="font-semibold text-lg">Sign in required</h2>
             <p className="text-sm text-muted-foreground mt-1">You need an account before editing profile settings.</p>
-            <Link href="/login?redirect=/account/edit" className="btn-primary inline-flex mt-4 px-4 py-2">
+            <Link href="/sign-in?redirect_url=/account/edit" className="btn-primary inline-flex mt-4 px-4 py-2">
               Sign In
             </Link>
           </div>
@@ -230,7 +204,7 @@ export default function AccountEditPage() {
 
               <div className="bg-card border border-border rounded-2xl p-5">
                 <h2 className="font-semibold mb-3">Preferences</h2>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer mb-3">
                   <input
                     type="checkbox"
                     checked={form.marketingOptIn}
@@ -239,6 +213,26 @@ export default function AccountEditPage() {
                   />
                   <span className="text-sm">Send me offers and order updates</span>
                 </label>
+                <label className="flex items-center gap-3 cursor-pointer mb-4">
+                  <input
+                    type="checkbox"
+                    checked={form.orderUpdatesOptIn}
+                    onChange={(e) => update("orderUpdatesOptIn", e.target.checked)}
+                    className="w-4 h-4 accent-brand-600"
+                  />
+                  <span className="text-sm">Send order status updates</span>
+                </label>
+                <label className="text-sm font-medium mb-1 block">Theme</label>
+                <select value={form.theme} onChange={(e) => update("theme", e.target.value)} className="form-input text-sm mb-3">
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+                <label className="text-sm font-medium mb-1 block">Language</label>
+                <select value={form.language} onChange={(e) => update("language", e.target.value)} className="form-input text-sm">
+                  <option value="en">English</option>
+                  <option value="bn">Bangla</option>
+                </select>
               </div>
 
               <button type="submit" disabled={saving || loading} className="btn-primary w-full flex items-center justify-center gap-2 h-11">

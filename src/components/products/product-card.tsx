@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { ShoppingCart, Heart, Star, Eye } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/components/providers/auth-provider";
 
 interface Product {
   id: string;
@@ -26,6 +28,8 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, isFlashSale }: ProductCardProps) {
+  const router = useRouter();
+  const { user } = useAuth();
   const discount = product.discountPrice
     ? calculateDiscount(product.price, product.discountPrice)
     : 0;
@@ -36,9 +40,38 @@ export default function ProductCard({ product, isFlashSale }: ProductCardProps) 
   const productRating = product.rating ?? 0;
   const productReviews = product.reviewCount ?? 0;
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
-    toast.success(`${product.name} added to cart!`);
+
+    if (!user) {
+      toast.error("Sign in to save your cart");
+      router.push(`/login?redirect=${encodeURIComponent(productUrl)}`);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: product.id,
+          name: product.name,
+          price: displayPrice,
+          quantity: 1,
+          imageUrl: productImages[0] ?? null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to add item");
+      }
+
+      window.dispatchEvent(new Event("medimart:cart-updated"));
+      toast.success(`${product.name} added to cart`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Add to cart failed");
+    }
   };
 
   const handleWishlist = (e: React.MouseEvent) => {
@@ -72,7 +105,7 @@ export default function ProductCard({ product, isFlashSale }: ProductCardProps) 
         ) : null}
 
         {/* Low Stock */}
-        {product.stock <= 5 && product.stock > 0 && (
+        {(product.stock ?? 0) <= 5 && (product.stock ?? 0) > 0 && (
           <span className="absolute bottom-2 left-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
             Only {product.stock} left!
           </span>
@@ -138,16 +171,16 @@ export default function ProductCard({ product, isFlashSale }: ProductCardProps) 
         {/* Add to Cart */}
         <button
           onClick={handleAddToCart}
-          disabled={product.stock === 0}
+          disabled={(product.stock ?? 0) === 0}
           className={cn(
             "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200",
-            product.stock === 0
+            (product.stock ?? 0) === 0
               ? "bg-muted text-muted-foreground cursor-not-allowed"
               : "bg-brand-600 hover:bg-brand-700 text-white active:scale-95"
           )}
         >
           <ShoppingCart className="w-3.5 h-3.5" />
-          {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
+          {(product.stock ?? 0) === 0 ? "Out of Stock" : "Add to Cart"}
         </button>
       </div>
     </Link>

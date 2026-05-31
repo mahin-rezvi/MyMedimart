@@ -5,25 +5,31 @@ import Link from "next/link";
 import { Search, Eye, Download, MessageCircle, RefreshCw } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { toast } from "sonner";
+import { ORDER_STATUS_META, ORDER_STATUSES } from "@/lib/order-status";
 
 interface Order {
   id: string; orderNumber: string; invoiceNo?: string;
-  customer: { name: string; phone: string };
-  total: number; items?: unknown[]; status: string; payment?: string;
+  customer: { name: string; phone: string; email?: string };
+  total: number; items?: Array<{ qty?: number; quantity?: number }>; status: string; payment?: string;
   createdAt?: { seconds: number };
+}
+
+/**
+ * Normalize BD phone number for WhatsApp.
+ * Ensures exactly one 880 prefix (BD country code), no leading zeros.
+ */
+function toWhatsAppNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("880")) return digits;
+  if (digits.startsWith("0")) return `880${digits.slice(1)}`;
+  return `880${digits}`;
 }
 
 function getOrdersExportFilename() {
   return `orders-${new Date().toISOString()}.csv`;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: "status-pending", CONFIRMED: "status-confirmed",
-  PROCESSING: "status-processing", SHIPPED: "status-shipped",
-  DELIVERED: "status-delivered", CANCELLED: "status-cancelled",
-};
-
-const ALL_STATUSES = ["All", "PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
+const ALL_STATUSES = ["All", ...ORDER_STATUSES];
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -34,10 +40,11 @@ export default function AdminOrdersPage() {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/orders");
+      const res = await fetch("/api/admin/orders");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load orders");
       setOrders(data.orders ?? []);
-    } catch { toast.error("Failed to load orders"); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to load orders"); }
     finally { setLoading(false); }
   }, []);
 
@@ -46,14 +53,16 @@ export default function AdminOrdersPage() {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      await fetch("/api/admin/products", {
-        method: "PUT",
+      const res = await fetch("/api/admin/orders", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status, _collection: "orders" }),
+        body: JSON.stringify({ id, status }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Update failed");
       setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status } : o));
       toast.success("Order status updated");
-    } catch { toast.error("Update failed"); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Update failed"); }
   };
 
   const exportCSV = () => {
@@ -61,7 +70,7 @@ export default function AdminOrdersPage() {
     filtered.forEach((o) => rows.push([
       o.orderNumber, o.customer?.name ?? "", o.customer?.phone ?? "",
       String(o.total), o.status, o.payment ?? "",
-      o.createdAt ? new Date(o.createdAt.seconds * 1000).toLocaleDateString() : "",
+      o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toLocaleDateString() : "",
     ]));
     const csv = rows.map((r) => r.join(",")).join("\n");
     const a = document.createElement("a");
@@ -94,7 +103,7 @@ export default function AdminOrdersPage() {
         {ALL_STATUSES.map((s) => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${statusFilter === s ? "bg-brand-600 text-white" : "bg-card border border-border hover:bg-muted"}`}>
-            {s}
+            {s === "All" ? "All" : ORDER_STATUS_META[s as keyof typeof ORDER_STATUS_META]?.label ?? s}
           </button>
         ))}
       </div>
@@ -138,21 +147,23 @@ export default function AdminOrdersPage() {
                       <p className="text-xs text-muted-foreground">{order.customer?.phone}</p>
                     </td>
                     <td className="py-3 px-4 text-right font-bold">{formatPrice(order.total)}</td>
-                    <td className="py-3 px-4 text-center">{order.items?.length ?? "—"}</td>
+                    <td className="py-3 px-4 text-center">{order.items?.reduce((sum, item) => sum + Number(item.qty ?? item.quantity ?? 1), 0) ?? "—"}</td>
                     <td className="py-3 px-4 text-center">
                       <div className="relative inline-block">
                         <select
                           value={order.status}
                           onChange={(e) => updateStatus(order.id, e.target.value)}
-                          className={`text-xs px-2 py-1 rounded-full font-semibold cursor-pointer border-0 outline-none ${STATUS_COLORS[order.status] ?? "bg-muted"}`}
+                          className={`text-xs px-2 py-1 rounded-full font-semibold cursor-pointer border-0 outline-none ${ORDER_STATUS_META[order.status as keyof typeof ORDER_STATUS_META]?.className ?? "bg-muted"}`}
                         >
-                          {ALL_STATUSES.filter((s) => s !== "All").map((s) => <option key={s} value={s}>{s}</option>)}
+                          {ALL_STATUSES.filter((s) => s !== "All").map((s) => (
+                            <option key={s} value={s}>{ORDER_STATUS_META[s as keyof typeof ORDER_STATUS_META]?.label ?? s}</option>
+                          ))}
                         </select>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-center text-xs text-muted-foreground">{order.payment ?? "—"}</td>
                     <td className="py-3 px-4 text-xs text-muted-foreground">
-                      {order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleDateString("en-BD") : "—"}
+                      {order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleDateString("en-BD") : "—"}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1">
@@ -160,7 +171,7 @@ export default function AdminOrdersPage() {
                           <Eye className="w-3.5 h-3.5" />
                         </Link>
                         {order.customer?.phone && (
-                          <a href={`https://wa.me/88${order.customer.phone}?text=Hi ${order.customer.name}, your order ${order.orderNumber} status: ${order.status}`} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-green-50 hover:text-green-600 transition-colors" title="WhatsApp">
+                          <a href={`https://wa.me/${toWhatsAppNumber(order.customer.phone)}?text=Hi ${encodeURIComponent(order.customer.name)}, your order ${order.orderNumber} status: ${ORDER_STATUS_META[order.status as keyof typeof ORDER_STATUS_META]?.label ?? order.status}`} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-green-50 hover:text-green-600 transition-colors" title="WhatsApp">
                             <MessageCircle className="w-3.5 h-3.5" />
                           </a>
                         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Save, Loader2, Store, Globe, Phone, Mail } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,16 +14,58 @@ export default function AdminSettingsPage() {
     currency: "BDT",
     currencySymbol: "৳",
     appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    freeShippingThreshold: "1000",
+    standardShippingCost: "80",
   });
 
   const update = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch("/api/admin/settings");
+        const data = await res.json();
+        if (!res.ok) return;
+        const settings = data.settings;
+        setForm((prev) => ({
+          ...prev,
+          storeName: settings.storeName ?? prev.storeName,
+          storeEmail: settings.storeEmail ?? prev.storeEmail,
+          storePhone: settings.storePhone ?? prev.storePhone,
+          storeAddress: settings.storeAddress ?? prev.storeAddress,
+          currency: settings.currency ?? prev.currency,
+          currencySymbol: settings.currencySymbol ?? prev.currencySymbol,
+          appUrl: settings.appUrl ?? prev.appUrl,
+          freeShippingThreshold: String(settings.freeShippingThreshold ?? prev.freeShippingThreshold),
+          standardShippingCost: String(settings.standardShippingCost ?? prev.standardShippingCost),
+        }));
+      } catch {}
+    }
+
+    loadSettings();
+  }, []);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success("Settings saved! (Update .env for persistent changes)");
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          freeShippingThreshold: Number(form.freeShippingThreshold),
+          standardShippingCost: Number(form.standardShippingCost),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
+      toast.success("Settings saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Save failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,10 +91,10 @@ export default function AdminSettingsPage() {
             <div><label className="text-sm font-medium mb-1 block">Currency Code</label><input value={form.currency} onChange={(e) => update("currency", e.target.value)} className="form-input" /></div>
             <div><label className="text-sm font-medium mb-1 block">Currency Symbol</label><input value={form.currencySymbol} onChange={(e) => update("currencySymbol", e.target.value)} className="form-input" /></div>
           </div>
-        </div>
-
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-400">
-          <strong>Note:</strong> To persist these settings across deployments, update your <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900/40 px-1 py-0.5 rounded">.env</code> file or Firestore settings document.
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-sm font-medium mb-1 block">Free Shipping Threshold</label><input type="number" value={form.freeShippingThreshold} onChange={(e) => update("freeShippingThreshold", e.target.value)} className="form-input" /></div>
+            <div><label className="text-sm font-medium mb-1 block">Standard Shipping Cost</label><input type="number" value={form.standardShippingCost} onChange={(e) => update("standardShippingCost", e.target.value)} className="form-input" /></div>
+          </div>
         </div>
 
         <button type="submit" disabled={loading} className="btn-primary flex items-center gap-2 h-10 px-6">

@@ -97,10 +97,14 @@ export default function AddProductPage() {
         toast.success("Product created successfully!");
         router.push("/admin/products");
       } else {
-        toast.error("Failed to create product.");
+        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        const msg = errData.error ?? "Failed to create product";
+        toast.error(`Error: ${msg}`);
+        console.error("Product create failed:", errData);
       }
-    } catch {
-      toast.error("Something went wrong");
+    } catch (err) {
+      console.error("Product create exception:", err);
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
       setUploadProgress(0);

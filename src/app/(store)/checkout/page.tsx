@@ -1,16 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, CreditCard, Smartphone, Banknote, ArrowRight, Lock } from "lucide-react";
+import { MapPin, CreditCard, Smartphone, Banknote, ArrowRight, Lock, RefreshCw } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
 
-const ORDER_SUMMARY = [
-  { name: "Samsung Galaxy S24 Ultra", variant: "256GB", price: 129999, qty: 1 },
-  { name: "JBL Flip 6 Speaker", variant: null, price: 8999, qty: 2 },
-];
+interface CartItem {
+  id: string;
+  name: string;
+  variant?: string | null;
+  price: number;
+  quantity: number;
+}
+
+interface Address {
+  id: string;
+  label?: string | null;
+  full_name?: string | null;
+  phone?: string | null;
+  street?: string | null;
+  area?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  notes?: string | null;
+  is_default: boolean;
+}
 
 const PAYMENT_METHODS = [
   { id: "cod", label: "Cash on Delivery", icon: Banknote, desc: "Pay when you receive" },
@@ -24,24 +40,105 @@ export default function CheckoutPage() {
   const { user, loading: authLoading } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
   const [form, setForm] = useState({
     fullName: "", phone: "", email: "", street: "",
     area: "", city: "", notes: "",
   });
 
-  // Redirect to login if not authenticated
+  const applyAddress = (address: Address) => {
+    setForm((prev) => ({
+      ...prev,
+      fullName: address.full_name || prev.fullName,
+      phone: address.phone || prev.phone,
+      street: address.street || "",
+      area: address.area || "",
+      city: address.city || "",
+      notes: address.notes || prev.notes,
+    }));
+  };
+
   useEffect(() => {
     if (!authLoading && !user) {
       toast.error("Please sign in to place an order");
-      router.push("/login");
+      router.push("/login?redirect=/checkout");
     }
   }, [user, authLoading, router]);
 
-  const subtotal = ORDER_SUMMARY.reduce((s, i) => s + i.price * i.qty, 0);
-  const shipping = 80;
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const currentUser = user;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm((prev) => ({
+      ...prev,
+      fullName: prev.fullName || currentUser.displayName || "",
+      email: prev.email || currentUser.email || "",
+      phone: prev.phone || currentUser.phoneNumber || "",
+    }));
+
+    async function loadCheckoutData() {
+      setInitialLoading(true);
+      try {
+        const [cartRes, settingsRes, addressesRes] = await Promise.all([
+          fetch("/api/cart"),
+          fetch("/api/account/settings"),
+          fetch("/api/account/addresses"),
+        ]);
+
+        const cartData = await cartRes.json();
+        if (!cartRes.ok) throw new Error(cartData.error ?? "Failed to load cart");
+        setItems(cartData.cart?.items ?? []);
+
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          const settings = data.settings;
+          setForm((prev) => ({
+            ...prev,
+            fullName: prev.fullName || settings?.display_name || currentUser.displayName || "",
+            phone: prev.phone || settings?.phone || currentUser.phoneNumber || "",
+            street: prev.street || settings?.default_address || "",
+            city: prev.city || settings?.city || "",
+          }));
+        }
+
+        if (addressesRes.ok) {
+          const data = await addressesRes.json();
+          const loadedAddresses: Address[] = data.addresses ?? [];
+          setAddresses(loadedAddresses);
+          const defaultAddress = loadedAddresses.find((address) => address.is_default) ?? loadedAddresses[0];
+          if (defaultAddress) {
+            setSelectedAddressId(defaultAddress.id);
+            applyAddress(defaultAddress);
+          }
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Checkout unavailable");
+      } finally {
+        setInitialLoading(false);
+      }
+    }
+
+    loadCheckoutData();
+  }, [authLoading, user]);
+
+  const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+    [items]
+  );
+  const shipping = subtotal >= 1000 || subtotal === 0 ? 0 : 80;
   const total = subtotal + shipping;
 
-  const update = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const update = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const selectAddress = (id: string) => {
+    setSelectedAddressId(id);
+    const address = addresses.find((item) => item.id === id);
+    if (address) applyAddress(address);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,50 +146,89 @@ export default function CheckoutPage() {
       toast.error("You must be signed in to place an order");
       return;
     }
+    if (items.length === 0) {
+      toast.error("Your cart is empty");
+      router.push("/cart");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: user.uid,
           ...form,
           paymentMethod,
-          items: ORDER_SUMMARY,
+          items: items.map((item) => ({
+            name: item.name,
+            variant: item.variant,
+            price: Number(item.price),
+            qty: item.quantity,
+          })),
           subtotal,
           shippingCost: shipping,
           totalAmount: total,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success("Order placed successfully!");
-        router.push(`/order-confirmed/${data.id}`);
-      } else {
-        const error = await res.json();
-        toast.error(error.error || "Order failed. Please try again.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Network error. Please try again.");
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Order failed. Please try again.");
+
+      window.dispatchEvent(new Event("medimart:cart-updated"));
+      toast.success("Order placed successfully");
+      router.push(`/order-confirmed/${data.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Network error. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  if (authLoading || initialLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 flex items-center justify-center gap-2 text-muted-foreground">
+        <RefreshCw className="w-4 h-4 animate-spin" />
+        Loading checkout...
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+        <h1 className="font-display text-2xl font-bold">Your cart is empty</h1>
+        <p className="text-muted-foreground mt-2">Add products before checking out.</p>
+        <button onClick={() => router.push("/products")} className="btn-primary mt-6">Browse Products</button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="font-display text-3xl font-bold mb-8">Checkout</h1>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Address + Payment */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Shipping Address */}
           <div className="bg-card border border-border rounded-2xl p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <MapPin className="w-5 h-5 text-brand-600" />
               Shipping Address
             </h2>
+
+            {addresses.length > 0 && (
+              <div className="mb-5">
+                <label className="text-sm font-medium mb-1 block">Saved Address</label>
+                <select value={selectedAddressId} onChange={(e) => selectAddress(e.target.value)} className="form-input">
+                  {addresses.map((address) => (
+                    <option key={address.id} value={address.id}>
+                      {address.label || "Address"}{address.is_default ? " (Default)" : ""} - {address.city || "No city"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Full Name *</label>
@@ -118,8 +254,8 @@ export default function CheckoutPage() {
                 <label className="text-sm font-medium mb-1 block">City *</label>
                 <select required value={form.city} onChange={(e) => update("city", e.target.value)} className="form-input">
                   <option value="">Select City</option>
-                  {["Dhaka", "Chattogram", "Sylhet", "Rajshahi", "Khulna", "Barishal", "Rangpur", "Mymensingh"].map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                  {["Dhaka", "Chattogram", "Sylhet", "Rajshahi", "Khulna", "Barishal", "Rangpur", "Mymensingh"].map((city) => (
+                    <option key={city} value={city}>{city}</option>
                   ))}
                 </select>
               </div>
@@ -130,18 +266,17 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Payment Method */}
           <div className="bg-card border border-border rounded-2xl p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-brand-600" />
               Payment Method
             </h2>
             <div className="grid sm:grid-cols-2 gap-3">
-              {PAYMENT_METHODS.map((pm) => (
+              {PAYMENT_METHODS.map((method) => (
                 <label
-                  key={pm.id}
+                  key={method.id}
                   className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                    paymentMethod === pm.id
+                    paymentMethod === method.id
                       ? "border-brand-600 bg-brand-50 dark:bg-brand-950/30"
                       : "border-border hover:border-brand-300"
                   }`}
@@ -149,15 +284,15 @@ export default function CheckoutPage() {
                   <input
                     type="radio"
                     name="payment"
-                    value={pm.id}
-                    checked={paymentMethod === pm.id}
-                    onChange={() => setPaymentMethod(pm.id)}
+                    value={method.id}
+                    checked={paymentMethod === method.id}
+                    onChange={() => setPaymentMethod(method.id)}
                     className="accent-brand-600"
                   />
-                  <pm.icon className={`w-5 h-5 ${paymentMethod === pm.id ? "text-brand-600" : "text-muted-foreground"}`} />
+                  <method.icon className={`w-5 h-5 ${paymentMethod === method.id ? "text-brand-600" : "text-muted-foreground"}`} />
                   <div>
-                    <p className="font-semibold text-sm">{pm.label}</p>
-                    <p className="text-xs text-muted-foreground">{pm.desc}</p>
+                    <p className="font-semibold text-sm">{method.label}</p>
+                    <p className="text-xs text-muted-foreground">{method.desc}</p>
                   </div>
                 </label>
               ))}
@@ -165,16 +300,15 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* Order Summary */}
         <div className="bg-card border border-border rounded-2xl p-6 h-fit sticky top-20">
           <h2 className="font-semibold text-lg mb-4">Order Summary</h2>
           <div className="space-y-3 mb-4">
-            {ORDER_SUMMARY.map((item, i) => (
-              <div key={i} className="flex justify-between text-sm">
+            {items.map((item) => (
+              <div key={item.id} className="flex justify-between text-sm">
                 <span className="text-muted-foreground line-clamp-1 flex-1 mr-2">
-                  {item.name} {item.variant && `(${item.variant})`} ×{item.qty}
+                  {item.name} {item.variant && `(${item.variant})`} x{item.quantity}
                 </span>
-                <span className="font-medium shrink-0">{formatPrice(item.price * item.qty)}</span>
+                <span className="font-medium shrink-0">{formatPrice(Number(item.price) * item.quantity)}</span>
               </div>
             ))}
           </div>
@@ -185,7 +319,7 @@ export default function CheckoutPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
-              <span>{formatPrice(shipping)}</span>
+              <span>{shipping === 0 ? "FREE" : formatPrice(shipping)}</span>
             </div>
             <div className="flex justify-between font-bold text-base pt-2 border-t border-border">
               <span>Total</span>
@@ -193,11 +327,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full mt-6 flex items-center justify-center gap-2"
-          >
+          <button type="submit" disabled={loading} className="btn-primary w-full mt-6 flex items-center justify-center gap-2">
             {loading ? (
               <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
             ) : (
@@ -209,7 +339,7 @@ export default function CheckoutPage() {
             )}
           </button>
           <p className="text-xs text-muted-foreground text-center mt-3 flex items-center justify-center gap-1">
-            <Lock className="w-3 h-3" /> Secure & encrypted checkout
+            <Lock className="w-3 h-3" /> Secure checkout
           </p>
         </div>
       </form>

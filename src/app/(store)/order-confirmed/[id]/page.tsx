@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle, Download, Package, Truck, Home } from "lucide-react";
+import { CheckCircle, Download, Package, Truck, Home, MessageCircle } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { ordersRepo } from "@/lib/db/repositories";
 
@@ -157,6 +157,14 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
         <Link href="/account/orders" className="flex-1 btn-primary flex items-center justify-center gap-2">
           <Package className="w-4 h-4" /> Track My Orders
         </Link>
+        <a
+          href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "880"}?text=${encodeURIComponent(`Hi, I want to confirm my order ${orderNumber}`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold rounded-xl px-4 py-3 transition-colors"
+        >
+          <MessageCircle className="w-4 h-4" /> Confirm on WhatsApp
+        </a>
       </div>
 
       <div className="text-center mt-6">

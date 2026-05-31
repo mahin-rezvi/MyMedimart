@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Upload, Settings,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
+import { toast } from "sonner";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -26,7 +27,18 @@ const NAV_ITEMS = [
 
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const { user } = useAuth();
+
+  const handleAdminLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+      toast.success("Logged out");
+      router.push("/admin-login");
+    } catch {
+      toast.error("Logout failed");
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-[#0c1a2e] text-white">
@@ -96,7 +108,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
             <p className="text-white/35 text-[10px] truncate">{user?.email ?? ""}</p>
           </div>
           <button
-            onClick={() => signOut()}
+            onClick={handleAdminLogout}
             className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors shrink-0"
             title="Sign out"
           >

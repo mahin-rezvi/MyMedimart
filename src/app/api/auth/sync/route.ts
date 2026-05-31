@@ -27,12 +27,12 @@ export async function POST(req: NextRequest) {
       providerData: [],
       refreshToken: "",
       getIdToken: async () => "",
-      getIdTokenResult: async () => ({} as any),
+      getIdTokenResult: async () => ({}),
       reload: async () => {},
       toJSON: () => ({}),
-    };
+    } as unknown as Parameters<typeof syncFirebaseUserToNeon>[0];
 
-    await syncFirebaseUserToNeon(firebaseUser as any);
+    await syncFirebaseUserToNeon(firebaseUser);
 
     return NextResponse.json(
       { success: true, message: "User synced to Neon" },

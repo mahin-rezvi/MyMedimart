@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -8,7 +8,7 @@ import {
   ShoppingCart, Search, Menu, X, Heart, ChevronDown,
   Sun, Moon, Phone, Truck, Shield, RotateCcw, Zap,
   Smartphone, Laptop, Shirt, Home, Pill, ShoppingBag,
-  Cpu, Dumbbell, Baby, BookOpen, Utensils, Car, LogOut, User,
+  Cpu, Dumbbell, Baby, BookOpen, Utensils, Car, LogOut, User, Package,
 } from "lucide-react";
 import { useTheme } from "@/components/providers/theme-provider";
 import { cn } from "@/lib/utils";
@@ -40,16 +40,62 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [megaMenuOpen, setMegaMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => setMounted(true));
+  }, []);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadCartCount() {
+      if (!user) {
+        setCartCount(0);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/cart");
+        if (!res.ok) throw new Error("Cart unavailable");
+        const data = await res.json();
+        if (!ignore) setCartCount(Number(data.cart?.item_count ?? 0));
+      } catch {
+        if (!ignore) setCartCount(0);
+      }
+    }
+
+    loadCartCount();
+    window.addEventListener("medimart:cart-updated", loadCartCount);
+    return () => {
+      ignore = true;
+      window.removeEventListener("medimart:cart-updated", loadCartCount);
+    };
+  }, [user]);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -187,7 +233,7 @@ export default function Navbar() {
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
               >
-                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
 
               {/* Wishlist */}
@@ -202,9 +248,11 @@ export default function Navbar() {
               >
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden sm:inline">Cart</span>
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black">
-                  0
-                </span>
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black">
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </span>
+                )}
               </Link>
 
               {/* Flash Sale pill */}
@@ -215,38 +263,45 @@ export default function Navbar() {
 
               {/* Auth */}
               {user ? (
-                <div className="relative ml-1">
+                <div className="relative ml-1" ref={userMenuRef}>
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    aria-expanded={userMenuOpen}
+                    aria-haspopup="true"
                     className="flex items-center gap-2 p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
                   >
                     {avatar}
                     <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform hidden sm:block", userMenuOpen && "rotate-180")} />
                   </button>
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl p-1.5 animate-fade-in">
-                      <div className="px-3 py-2 mb-1 border-b border-gray-100 dark:border-gray-800">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl p-1.5 animate-fade-in z-50">
+                      <div className="px-3 py-2.5 mb-1 border-b border-gray-100 dark:border-gray-800">
                         <p className="text-sm font-semibold truncate">{user.displayName ?? "My Account"}</p>
                         <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
                       <Link href="/account" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <User className="w-4 h-4" /> My Account
+                        <User className="w-4 h-4 text-muted-foreground" /> My Account
                       </Link>
-                      <button
-                        onClick={() => { signOut(); setUserMenuOpen(false); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" /> Sign Out
-                      </button>
+                      <Link href="/account/orders" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <Package className="w-4 h-4 text-muted-foreground" /> My Orders
+                      </Link>
+                      <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
+                        <button
+                          onClick={() => { void signOut(); setUserMenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" /> Sign Out
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 ml-1">
-                  <Link href="/login" className="text-sm font-medium text-foreground/80 hover:text-foreground px-3 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hidden sm:flex">
+                  <Link href="/sign-in" className="text-sm font-medium text-foreground/80 hover:text-foreground px-3 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hidden sm:flex">
                     Sign In
                   </Link>
-                  <Link href="/register" className="text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-brand-500/25 hover:scale-105 active:scale-95">
+                  <Link href="/sign-up" className="text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-brand-500/25 hover:scale-105 active:scale-95">
                     Register
                   </Link>
                 </div>

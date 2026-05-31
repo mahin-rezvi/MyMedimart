@@ -18,34 +18,11 @@ interface Product {
   brand?: string;
 }
 
-const SAMPLE_PRODUCTS: Product[] = Array.from({ length: 16 }, (_, i) => ({
-  id: `p${i}`,
-  name: [
-    "Samsung Galaxy A35",
-    "Lenovo IdeaPad Gaming 3",
-    "JBL Tune 760NC",
-    "HP LaserJet Pro",
-    "Realme Narzo 70",
-    "ASUS VivoBook 16",
-    "Mi Pad 6",
-    "OnePlus 12",
-  ][i % 8],
-  slug: `product-${i}`,
-  price: [32000, 85000, 15000, 28000, 22000, 72000, 45000, 95000][i % 8],
-  discountPrice: [27000, 72000, 11000, 22000, 18000, 62000, 38000, 82000][i % 8],
-  images: [],
-  rating: 4 + (i % 10) * 0.1,
-  reviewCount: 50 + i * 23,
-  stock: 5 + i,
-  brand: ["Samsung", "Lenovo", "JBL", "HP", "Realme", "ASUS", "Xiaomi", "OnePlus"][i % 8],
-}));
-
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest First" },
   { value: "price_asc", label: "Price: Low to High" },
   { value: "price_desc", label: "Price: High to Low" },
   { value: "rating", label: "Top Rated" },
-  { value: "popular", label: "Most Popular" },
 ];
 
 const PRICE_RANGES = [
@@ -56,9 +33,11 @@ const PRICE_RANGES = [
   { label: "৳50,000+", min: 50000, max: Infinity },
 ];
 
+
 export default function ProductsClientPage() {
   const searchParams = useSearchParams();
-  const [products, setProducts] = useState<Product[]>(SAMPLE_PRODUCTS);
+
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,14 +59,11 @@ export default function ProductsClientPage() {
         const data = await response.json();
 
         if (ignore) return;
-        if (!response.ok) {
-          throw new Error(data?.error || "Failed to load products");
-        }
-
-        setProducts((data.products && data.products.length > 0) ? data.products : SAMPLE_PRODUCTS);
+        if (!response.ok) throw new Error(data?.error || "Failed to load products");
+        setProducts(Array.isArray(data.products) ? data.products : []);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Unable to load products");
-        setProducts(SAMPLE_PRODUCTS);
+        setProducts([]);
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -180,6 +156,14 @@ export default function ProductsClientPage() {
                 <div key={index} className="h-72 animate-pulse rounded-3xl bg-muted" />
               ))}
             </div>
+          ) : products.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+              <div className="text-6xl opacity-20">📦</div>
+              <h2 className="font-semibold text-lg">No Products Found</h2>
+              <p className="text-sm text-muted-foreground">
+                No products available yet. Check back soon!
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {products.map((product) => (
@@ -187,21 +171,6 @@ export default function ProductsClientPage() {
               ))}
             </div>
           )}
-
-          <div className="flex justify-center mt-10 gap-1">
-            {[1, 2, 3, "...", 10].map((page, i) => (
-              <button
-                key={i}
-                className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
-                  page === 1
-                    ? "bg-brand-600 text-white"
-                    : "hover:bg-muted text-muted-foreground"
-                }`}
-              >
-                {page}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>

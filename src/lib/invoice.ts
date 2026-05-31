@@ -2,12 +2,17 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { Order } from "./db/types";
 import { getStoreContact } from "./email";
 
+type InvoiceOrder = Order & { invoice_no?: string };
+type InvoiceAddress = NonNullable<Order["shipping_address"]> & { invoiceNo?: string };
+
 function formatInvoiceAmount(amount: number): string {
   return `Tk ${amount.toLocaleString("en-US")}`;
 }
 
 export function getInvoiceNumber(order: Order): string {
-  const storedInvoiceNo = (order as any).invoice_no || (order.shipping_address as any)?.invoiceNo;
+  const invoiceOrder = order as InvoiceOrder;
+  const shippingAddress = order.shipping_address as InvoiceAddress | undefined;
+  const storedInvoiceNo = invoiceOrder.invoice_no || shippingAddress?.invoiceNo;
   if (storedInvoiceNo) return String(storedInvoiceNo);
   return `INV-${String(order.id).slice(0, 8).toUpperCase()}`;
 }
@@ -15,14 +20,14 @@ export function getInvoiceNumber(order: Order): string {
 export async function createInvoicePdf(order: Order): Promise<Buffer> {
   const store = getStoreContact();
   const invoiceNo = getInvoiceNumber(order);
-  const orderNumber = (order.shipping_address as any)?.orderNumber || String(order.id).slice(0, 8).toUpperCase();
-  const customer = (order.shipping_address as any) ?? {};
+  const customer = (order.shipping_address ?? {}) as InvoiceAddress;
+  const orderNumber = customer.orderNumber || String(order.id).slice(0, 8).toUpperCase();
   const items = Array.isArray(order.items) ? order.items : [];
   const createdAt = order.created_at ? new Date(order.created_at) : new Date();
-  const subtotal = Number((order.shipping_address as any)?.subtotal ?? order.total_price ?? 0) - Number((order.shipping_address as any)?.shippingCost ?? 0);
-  const shippingCost = Number((order.shipping_address as any)?.shippingCost ?? 0);
-  const totalAmount = Number(order.total_price ?? (order.shipping_address as any)?.totalAmount ?? 0);
-  const paymentMethod = (order.shipping_address as any)?.paymentMethod || "Unknown";
+  const shippingCost = Number(customer.shippingCost ?? 0);
+  const totalAmount = Number(order.total_price ?? customer.totalAmount ?? 0);
+  const subtotal = Number(customer.subtotal ?? totalAmount - shippingCost);
+  const paymentMethod = customer.paymentMethod || "Unknown";
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]);
@@ -74,7 +79,7 @@ export async function createInvoicePdf(order: Order): Promise<Buffer> {
   page.drawText("Items", { x: margin, y, size: 12, font: helveticaBold });
   y -= 18;
 
-  items.forEach((item: any) => {
+  items.forEach((item) => {
     const itemLabel = `${item.name}${item.variant ? ` (${item.variant})` : ""}`;
     const itemAmount = formatInvoiceAmount(Number(item.price ?? 0) * Number(item.qty ?? 1));
     page.drawText(itemLabel, { x: margin, y, size: 10, font: helvetica });

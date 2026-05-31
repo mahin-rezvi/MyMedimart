@@ -3,8 +3,10 @@
 export interface Category {
   id: string;
   name: string;
+  slug?: string;
   icon?: string;
   is_active: boolean;
+  isActive?: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -12,14 +14,27 @@ export interface Category {
 export interface Product {
   id: string;
   name: string;
+  slug?: string;
   price: number;
-  category_id: string;
+  discount_price?: number | null;
+  discountPrice?: number | null;
+  stock?: number;
+  category_id?: string;
+  category?: string;
+  brand?: string;
   description?: string;
+  short_desc?: string;
+  shortDesc?: string;
   sku: string;
   is_active: boolean;
   is_featured: boolean;
   is_flash_sale: boolean;
+  isActive?: boolean;
+  isFeatured?: boolean;
+  isFlashSale?: boolean;
   images?: string[];
+  specs?: Record<string, string>;
+  tags?: string[];
   created_at: Date;
   updated_at: Date;
 }
@@ -70,6 +85,72 @@ export interface Order {
   status: string;
   items?: OrderItem[];
   shipping_address?: ShippingAddress;
+  tracking_number?: string | null;
+  admin_note?: string | null;
+  customer?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  };
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CartItem {
+  id: string;
+  cart_id: string;
+  product_id?: string | null;
+  name: string;
+  variant?: string | null;
+  quantity: number;
+  price: number;
+  image_url?: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Cart {
+  id: string;
+  user_id: string;
+  coupon_code?: string | null;
+  items: CartItem[];
+  subtotal: number;
+  item_count: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface UserSettings {
+  user_id: string;
+  display_name?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  default_address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  marketing_opt_in: boolean;
+  order_updates_opt_in: boolean;
+  theme: string;
+  language: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface UserAddress {
+  id: string;
+  user_id: string;
+  label?: string | null;
+  full_name?: string | null;
+  phone?: string | null;
+  street?: string | null;
+  area?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  notes?: string | null;
+  is_default: boolean;
   created_at: Date;
   updated_at: Date;
 }

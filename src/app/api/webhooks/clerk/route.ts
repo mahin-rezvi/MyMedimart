@@ -4,6 +4,31 @@ import { queryOne, query as dbQuery } from "@/lib/db/postgres";
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET || "";
 
+interface ClerkWebhookEmail {
+  email_address?: string;
+  primary?: boolean;
+}
+
+interface ClerkWebhookUser {
+  id: string;
+  email_addresses?: ClerkWebhookEmail[];
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
+interface ClerkWebhookEvent {
+  type: string;
+  data: ClerkWebhookUser;
+}
+
+function getPrimaryEmail(emailAddresses: ClerkWebhookEmail[] = []) {
+  return (
+    emailAddresses.find((email) => email.primary)?.email_address ||
+    emailAddresses[0]?.email_address ||
+    ""
+  );
+}
+
 export async function POST(req: Request) {
   try {
     // Get the Svix headers
@@ -18,13 +43,13 @@ export async function POST(req: Request) {
     // Create a new Webhook instance with your secret
     const wh = new Webhook(webhookSecret);
 
-    let msg: any;
+    let msg: ClerkWebhookEvent;
     try {
       msg = wh.verify(body, {
         "svix-id": svixId,
         "svix-timestamp": svixTimestamp,
         "svix-signature": svixSignature,
-      });
+      }) as ClerkWebhookEvent;
     } catch (err) {
       console.error("Webhook signature verification failed:", err);
       return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,11 +60,7 @@ export async function POST(req: Request) {
     // Handle user.created event
     if (eventType === "user.created") {
       const { id, email_addresses, first_name, last_name } = msg.data;
-
-      const primaryEmail =
-        email_addresses.find((e: any) => e.primary)?.email_address ||
-        email_addresses[0]?.email_address ||
-        "";
+      const primaryEmail = getPrimaryEmail(email_addresses);
 
       const fullName = `${first_name || ""} ${last_name || ""}`.trim() || "User";
 
@@ -77,11 +98,7 @@ export async function POST(req: Request) {
     // Handle user.updated event
     if (eventType === "user.updated") {
       const { id, email_addresses, first_name, last_name } = msg.data;
-
-      const primaryEmail =
-        email_addresses.find((e: any) => e.primary)?.email_address ||
-        email_addresses[0]?.email_address ||
-        "";
+      const primaryEmail = getPrimaryEmail(email_addresses);
 
       const fullName = `${first_name || ""} ${last_name || ""}`.trim() || "User";
 

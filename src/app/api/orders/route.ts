@@ -1,65 +1,82 @@
 export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
-import { ordersRepo, usersRepo } from "@/lib/db/repositories";
+import { cartRepo, ordersRepo, usersRepo } from "@/lib/db/repositories";
 import { generateOrderNumber } from "@/lib/utils";
 import { createInvoicePdf } from "@/lib/invoice";
 import { sendMail, getInvoiceCopyEmail } from "@/lib/email";
 import { sendWhatsAppOrderNotification } from "@/lib/whatsapp";
+import { getCurrentDbUser } from "@/lib/server-auth";
+
+type IncomingItem = {
+  name?: string;
+  variant?: string | null;
+  qty?: number;
+  quantity?: number;
+  price?: number;
+};
+
+function normalizeItems(items: IncomingItem[] = []) {
+  return items
+    .map((item) => ({
+      name: String(item.name ?? "Product"),
+      variant: item.variant ?? null,
+      qty: Math.max(1, Number(item.qty ?? item.quantity ?? 1)),
+      price: Number(item.price ?? 0),
+    }))
+    .filter((item) => item.price > 0);
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const currentUser = await getCurrentDbUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    }
+
     const body = await req.json();
     const orderId = crypto.randomUUID();
     const orderNumber = generateOrderNumber();
+    const orderItems = normalizeItems(body.items);
 
-    if (!body.userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    if (orderItems.length === 0) {
+      return NextResponse.json({ error: "Order must contain at least one item" }, { status: 400 });
     }
 
-    let orderUserId = body.userId;
-    const existingUser = await usersRepo.getById(body.userId);
-    if (!existingUser) {
-      const emailUser = body.email ? await usersRepo.getByEmail(body.email) : null;
-      if (emailUser) {
-        orderUserId = emailUser.id;
-      } else {
-        await usersRepo.create({
-          id: body.userId,
-          email: body.email ?? `user-${body.userId}@example.com`,
-          password_hash: undefined,
-          name: body.fullName ?? undefined,
-          phone: body.phone ?? undefined,
-          role: "CUSTOMER",
-          is_active: true,
-        });
-      }
-    }
+    const subtotal = Number(body.subtotal ?? orderItems.reduce((sum, item) => sum + item.price * item.qty, 0));
+    const shippingCost = Number(body.shippingCost ?? 80);
+    const totalAmount = Number(body.totalAmount ?? subtotal + shippingCost);
+
+    await usersRepo.update(currentUser.id, {
+      name: body.fullName ? String(body.fullName) : currentUser.name,
+      phone: body.phone ? String(body.phone) : currentUser.phone,
+    });
 
     const shippingAddress = {
       fullName: body.fullName,
       phone: body.phone,
-      email: body.email,
+      email: body.email ?? currentUser.email,
       street: body.street,
       area: body.area,
       city: body.city,
       notes: body.notes,
       paymentMethod: body.paymentMethod,
-      shippingCost: body.shippingCost,
-      subtotal: body.subtotal,
-      totalAmount: body.totalAmount,
+      shippingCost,
+      subtotal,
+      totalAmount,
       orderNumber,
     };
 
     const order = await ordersRepo.create({
       id: orderId,
-      user_id: orderUserId,
-      total_price: body.totalAmount,
-      status: "CONFIRMED",
-      items: body.items,
+      user_id: currentUser.id,
+      total_price: totalAmount,
+      status: "PENDING",
+      items: orderItems,
       shipping_address: shippingAddress,
     });
 
-    const customerEmail = body.email;
+    const customerEmail = body.email ?? currentUser.email;
     const invoiceCopyEmail = getInvoiceCopyEmail();
     const emailPayload = await createInvoicePdf(order);
     const invoiceNo = `INV-${String(order.id).slice(0, 8).toUpperCase()}`;
@@ -102,19 +119,24 @@ export async function POST(req: NextRequest) {
 
     const updatedShippingAddress = {
       ...shippingAddress,
+      invoiceNo,
       notificationStatus: {
         emailSent,
         whatsappSent,
       },
     };
     const updatedOrder = await ordersRepo.updateShippingAddress(order.id, updatedShippingAddress);
+    await cartRepo.clear(currentUser.id);
 
-    return NextResponse.json({
-      ...updatedOrder,
-      orderNumber,
-      source: "neon",
-      notificationStatus: updatedShippingAddress.notificationStatus,
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        ...updatedOrder,
+        orderNumber,
+        source: "neon",
+        notificationStatus: updatedShippingAddress.notificationStatus,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Orders POST error:", error);
     return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
@@ -123,21 +145,26 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const currentUser = await getCurrentDbUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-    const rawLimit = Number(searchParams.get('limit') ?? 0);
+    const requestedUserId = searchParams.get("userId") ?? currentUser.id;
+    const rawLimit = Number(searchParams.get("limit") ?? 0);
     const limit = Number.isFinite(rawLimit) && rawLimit > 0
       ? Math.min(Math.floor(rawLimit), 50)
       : undefined;
 
-    if (!userId) {
-      return NextResponse.json({ error: "userId parameter required" }, { status: 400 });
+    if (requestedUserId !== currentUser.id && !["ADMIN", "SUPER_ADMIN"].includes(currentUser.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const orders = await ordersRepo.getByUserId(userId, limit);
+    const orders = await ordersRepo.getByUserId(requestedUserId, limit);
     return NextResponse.json({ orders, source: "neon" });
   } catch (error) {
-    console.error('Orders GET error:', error);
+    console.error("Orders GET error:", error);
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
 }

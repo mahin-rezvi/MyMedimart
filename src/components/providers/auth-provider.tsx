@@ -39,8 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isLoaded) return;
 
     if (!isSignedIn || !clerkUser) {
-      setRole("CUSTOMER");
-      setLoading(false);
+      void Promise.resolve().then(() => {
+        setRole("CUSTOMER");
+        setLoading(false);
+      });
       return;
     }
 

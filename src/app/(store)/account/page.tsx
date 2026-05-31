@@ -2,18 +2,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Package, Heart, MapPin, ChevronRight, Settings, ShieldCheck } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "@/components/providers/auth-provider";
-import { db } from "@/lib/firebase";
-
-export const dynamic = "force-dynamic";
-
-const STATUS_COLORS: Record<string, string> = {
-  CONFIRMED: "status-confirmed",
-  DELIVERED: "status-delivered",
-  PENDING: "status-pending",
-  SHIPPED: "status-shipped",
-};
+import { ORDER_STATUS_META } from "@/lib/order-status";
 
 interface ProfileDoc {
   displayName?: string;
@@ -60,12 +50,31 @@ export default function AccountPage() {
 
   useEffect(() => {
     async function loadProfile() {
-      if (!user || !db) return;
-      const snap = await getDoc(doc(db, "users", user.uid));
-      setProfile(snap.exists() ? snap.data() : null);
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/account/settings");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load profile");
+        const settings = data.settings;
+        setProfile({
+          displayName: settings?.display_name,
+          email: user.email ?? "",
+          phone: settings?.phone,
+          photoURL: settings?.photo_url,
+          role: user.role,
+          defaultAddress: settings?.default_address,
+          marketingOptIn: Boolean(settings?.marketing_opt_in),
+        });
+      } catch {
+        setProfile(null);
+      }
     }
 
-    loadProfile().catch(() => setProfile(null));
+    loadProfile();
   }, [user]);
 
   useEffect(() => {
@@ -209,8 +218,8 @@ export default function AccountPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[order.status]}`}>
-                    {order.status}
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${ORDER_STATUS_META[order.status as keyof typeof ORDER_STATUS_META]?.className ?? "bg-gray-100 text-gray-600"}`}>
+                    {ORDER_STATUS_META[order.status as keyof typeof ORDER_STATUS_META]?.label ?? order.status}
                   </span>
                   <span className="font-bold">৳{Number(order.total_price ?? 0).toLocaleString("en-BD")}</span>
                   <Link href={`/api/invoice/${order.id}`} className="text-xs text-brand-600 hover:underline">

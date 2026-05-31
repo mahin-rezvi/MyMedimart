@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Edit, Trash2, RefreshCw } from "lucide-react";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, query } from "firebase/firestore";
-import { db, FIREBASE_CONFIGURED } from "@/lib/firebase";
 import { toast } from "sonner";
 import { slugify } from "@/lib/utils";
 
@@ -20,12 +18,15 @@ export default function AdminCategoriesPage() {
 
   const fetchCategories = useCallback(async () => {
     setLoading(true);
-    if (!FIREBASE_CONFIGURED || !db) { setLoading(false); return; }
     try {
-      const firestore = db;
-      const snap = await getDocs(query(collection(firestore, "categories"), orderBy("name")));
-      setCategories(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Category)));
-    } catch { toast.error("Failed to load categories"); }
+      const res = await fetch("/api/admin/categories");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load categories");
+      setCategories((data.categories ?? []).map((category: Category & { is_active?: boolean }) => ({
+        ...category,
+        isActive: category.isActive ?? category.is_active ?? true,
+      })));
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to load categories"); }
     finally { setLoading(false); }
   }, []);
 
@@ -37,21 +38,32 @@ export default function AdminCategoriesPage() {
     if (!form.name) { toast.error("Name is required"); return; }
     const slug = slugify(form.name);
     try {
-      if (!FIREBASE_CONFIGURED || !db) { toast.error("Firestore not initialized"); return; }
-      const firestore = db;
+      const payload = { ...form, slug, is_active: form.isActive };
       if (editId) {
-        await updateDoc(doc(firestore, "categories", editId), { ...form, slug });
+        const res = await fetch("/api/admin/categories", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editId, ...payload }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Save failed");
         setCategories((prev) => prev.map((c) => c.id === editId ? { ...c, ...form, slug } : c));
         toast.success("Category updated");
       } else {
-        const ref = await addDoc(collection(firestore, "categories"), { ...form, slug, createdAt: serverTimestamp() });
-        setCategories((prev) => [...prev, { id: ref.id, ...form, slug }]);
+        const res = await fetch("/api/admin/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Save failed");
+        setCategories((prev) => [...prev, { ...data.category, isActive: data.category.is_active }]);
         toast.success("Category created");
       }
       setForm({ name: "", icon: "📦", isActive: true });
       setEditId(null);
       setShowForm(false);
-    } catch { toast.error("Save failed"); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Save failed"); }
   };
 
   const handleEdit = (cat: Category) => { setForm({ name: cat.name, icon: cat.icon ?? "📦", isActive: cat.isActive }); setEditId(cat.id); setShowForm(true); };
@@ -59,12 +71,12 @@ export default function AdminCategoriesPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return;
     try {
-      if (!FIREBASE_CONFIGURED || !db) { toast.error("Firestore not initialized"); return; }
-      const firestore = db;
-      await deleteDoc(doc(firestore, "categories", id));
+      const res = await fetch(`/api/admin/categories?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
       setCategories((prev) => prev.filter((c) => c.id !== id)); toast.success("Deleted");
     }
-    catch { toast.error("Delete failed"); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Delete failed"); }
   };
 
   return (

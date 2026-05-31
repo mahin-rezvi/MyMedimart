@@ -1,54 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
-import { verifyUserRole } from "@/lib/auth";
-import { getCurrentUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { requireAdminDbUser } from "@/lib/server-auth";
+import type { User } from "@/lib/db/types";
 
-export async function requireAdmin(req: NextRequest, firebaseUid: string) {
+/**
+ * Require an authenticated admin user (ADMIN or SUPER_ADMIN role).
+ * Uses Clerk for identity and Neon PostgreSQL for role verification.
+ *
+ * Returns { user } on success, or { error: NextResponse } on failure.
+ */
+export async function requireAdmin(): Promise<
+  { user: User; error?: never } | { user?: never; error: NextResponse }
+> {
   try {
-    if (!firebaseUid) {
-      return {
-        error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      };
-    }
-
-    const user = await getCurrentUser(firebaseUid);
-
-    if (!user) {
-      return {
-        error: NextResponse.json({ error: "User not found" }, { status: 404 }),
-      };
-    }
-
-    if (!user.is_active) {
-      return {
-        error: NextResponse.json(
-          { error: "Account is deactivated" },
-          { status: 403 }
-        ),
-      };
-    }
-
-    const isAdmin = await verifyUserRole(firebaseUid, [
-      "ADMIN",
-      "SUPER_ADMIN",
-    ]);
-
-    if (!isAdmin) {
-      return {
-        error: NextResponse.json(
-          { error: "Admin access required" },
-          { status: 403 }
-        ),
-      };
-    }
-
+    const user = await requireAdminDbUser();
     return { user };
-  } catch (error) {
-    console.error("Admin guard error:", error);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    const status = message.includes("Admin") ? 403 : 401;
     return {
-      error: NextResponse.json(
-        { error: "Authentication failed" },
-        { status: 500 }
-      ),
+      error: NextResponse.json({ error: message }, { status }),
     };
   }
 }

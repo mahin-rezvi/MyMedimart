@@ -203,6 +203,7 @@
   .status-confirmed { @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400; }
   .status-processing { @apply bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400; }
   .status-shipped { @apply bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400; }
+  .status-on-the-way { @apply bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400; }
   .status-delivered { @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400; }
   .status-cancelled { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400; }
 
@@ -226,4 +227,3 @@
   .overflow-y-auto::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
   .overflow-y-auto::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 }
-

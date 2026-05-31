@@ -5,27 +5,21 @@ import Link from "next/link";
 import { Package, RefreshCw } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { formatPrice } from "@/lib/utils";
+import { ORDER_STATUS_META } from "@/lib/order-status";
 
 interface AccountOrder {
   id: string;
   total_price?: number;
   status: string;
-  items?: Array<{ qty?: number }>;
+  items?: Array<{ qty?: number; quantity?: number }>;
   shipping_address?: {
     orderNumber?: string;
     paymentMethod?: string;
+    trackingNumber?: string;
   };
+  tracking_number?: string | null;
   created_at?: string;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  CONFIRMED: "status-confirmed",
-  DELIVERED: "status-delivered",
-  PENDING: "status-pending",
-  PROCESSING: "status-processing",
-  SHIPPED: "status-shipped",
-  CANCELLED: "status-cancelled",
-};
 
 function getOrderNumber(order: AccountOrder) {
   return order.shipping_address?.orderNumber ?? String(order.id).slice(0, 8).toUpperCase();
@@ -33,7 +27,7 @@ function getOrderNumber(order: AccountOrder) {
 
 function getItemCount(order: AccountOrder) {
   return Array.isArray(order.items)
-    ? order.items.reduce((sum, item) => sum + Number(item.qty ?? 1), 0)
+    ? order.items.reduce((sum, item) => sum + Number(item.qty ?? item.quantity ?? 1), 0)
     : 0;
 }
 
@@ -77,7 +71,7 @@ export default function AccountOrdersPage() {
         <div className="bg-card border border-border rounded-2xl p-6">
           <h1 className="font-display text-2xl font-bold">My Orders</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to view your order history.</p>
-          <Link href="/login?redirect=/account/orders" className="btn-primary inline-flex mt-4 px-4 py-2">
+          <Link href="/sign-in?redirect_url=/account/orders" className="btn-primary inline-flex mt-4 px-4 py-2">
             Sign In
           </Link>
         </div>
@@ -126,13 +120,14 @@ export default function AccountOrdersPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[order.status] ?? "bg-muted"}`}>
-                    {order.status}
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${ORDER_STATUS_META[order.status as keyof typeof ORDER_STATUS_META]?.className ?? "bg-muted text-muted-foreground"}`}>
+                    {ORDER_STATUS_META[order.status as keyof typeof ORDER_STATUS_META]?.label ?? order.status}
                   </span>
                   <span className="font-bold">{formatPrice(Number(order.total_price ?? 0))}</span>
-                  <a href={`/api/invoice/${order.id}`} className="text-xs text-brand-600 hover:underline">
-                    Invoice
-                  </a>
+                  {(order.tracking_number ?? order.shipping_address?.trackingNumber) && (
+                    <span className="text-xs text-muted-foreground">📦 {order.tracking_number ?? order.shipping_address?.trackingNumber}</span>
+                  )}
+                  <a href={`/api/invoice/${order.id}`} className="text-xs text-brand-600 hover:underline">Invoice</a>
                 </div>
               </div>
             ))}

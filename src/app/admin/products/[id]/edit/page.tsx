@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Save, Loader2, X, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useRef } from "react";
 
 const DEFAULT_CATEGORIES = ["Electronics", "Computers", "Fashion", "Home & Living", "Health & Beauty", "Grocery", "Sports", "Baby", "Kitchen", "Books", "Pharmacy", "Others"];
@@ -31,18 +29,17 @@ export default function EditProductPage() {
   useEffect(() => {
     async function load() {
       try {
-        if (!db) { toast.error("Firestore not configured"); router.push("/admin/products"); return; }
-        const firestore = db;
-        const snap = await getDoc(doc(firestore, "products", id));
-        if (!snap.exists()) { toast.error("Product not found"); router.push("/admin/products"); return; }
-        const d = snap.data();
+        const res = await fetch(`/api/admin/products?id=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        if (!res.ok) { toast.error(data.error ?? "Product not found"); router.push("/admin/products"); return; }
+        const d = data.product;
         setForm({
           name: d.name ?? "", sku: d.sku ?? "", price: String(d.price ?? ""),
           discountPrice: String(d.discountPrice ?? ""), stock: String(d.stock ?? ""),
           category: d.category ?? "", brand: d.brand ?? "",
-          description: d.description ?? "", shortDesc: d.shortDesc ?? "",
-          isActive: d.isActive ?? true, isFeatured: d.isFeatured ?? false,
-          isFlashSale: d.isFlashSale ?? false,
+          description: d.description ?? "", shortDesc: d.shortDesc ?? d.short_desc ?? "",
+          isActive: d.isActive ?? d.is_active ?? true, isFeatured: d.isFeatured ?? d.is_featured ?? false,
+          isFlashSale: d.isFlashSale ?? d.is_flash_sale ?? false,
           tags: Array.isArray(d.tags) ? d.tags.join(", ") : (d.tags ?? ""),
         });
         if (d.images) setImages((d.images as string[]).map((url) => ({ url })));
