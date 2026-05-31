@@ -12,9 +12,11 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Allow LAN IPs to connect to the dev server (HMR over network)
+  allowedDevOrigins: ["192.168.0.55", "192.168.1.*", "*.local"],
+
   experimental: {
     serverActions: {
-      // Allow any origin so LAN / ngrok access works without breaking server actions
       allowedOrigins: ["*"],
     },
   },
