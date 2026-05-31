@@ -103,7 +103,7 @@ export default function CartPage() {
           <ShoppingBag className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
           <h1 className="font-display text-2xl font-bold">Sign in to view your cart</h1>
           <p className="text-muted-foreground mt-2">Each account has its own saved cart.</p>
-          <Link href="/login?redirect=/cart" className="btn-primary inline-flex mt-6">Sign In</Link>
+          <Link href="/sign-in?redirect_url=/cart" className="btn-primary inline-flex mt-6">Sign In</Link>
         </div>
       </div>
     );

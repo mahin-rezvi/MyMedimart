@@ -7,6 +7,7 @@ import { createInvoicePdf } from "@/lib/invoice";
 import { sendMail, getInvoiceCopyEmail } from "@/lib/email";
 import { sendWhatsAppOrderNotification } from "@/lib/whatsapp";
 import { getCurrentDbUser } from "@/lib/server-auth";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 type IncomingItem = {
   name?: string;
@@ -28,6 +29,16 @@ function normalizeItems(items: IncomingItem[] = []) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 10 orders per 10 min per IP (prevents spam orders)
+  const ip = getClientIp(req);
+  const rl = rateLimit(`orders-post:${ip}`, 10, 10 * 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait before placing another order." },
+      { status: 429 }
+    );
+  }
+
   try {
     const currentUser = await getCurrentDbUser();
     if (!currentUser) {

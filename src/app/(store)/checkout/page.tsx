@@ -64,7 +64,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       toast.error("Please sign in to place an order");
-      router.push("/login?redirect=/checkout");
+      router.push("/sign-in?redirect_url=/checkout");
     }
   }, [user, authLoading, router]);
 

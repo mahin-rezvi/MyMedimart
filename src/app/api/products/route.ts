@@ -1,16 +1,29 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { productsRepo } from "@/lib/db/repositories";
-import { requireAdminDbUser } from "@/lib/server-auth";
+import { verifyAdminJwt } from "@/lib/admin-jwt";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+  // Rate limit: 60 reads/min per IP (public catalog)
+  const ip = getClientIp(req);
+  const rl = rateLimit(`products:${ip}`, 60, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+    );
+  }
+
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    const slug = searchParams.get('slug');
-    const category = searchParams.get('category');
-    const featured = searchParams.get('featured');
-    const flashSale = searchParams.get('flashSale');
+    const id = searchParams.get("id");
+    const slug = searchParams.get("slug");
+    const category = searchParams.get("category");
+    const featured = searchParams.get("featured");
+    const flashSale = searchParams.get("flashSale");
+    const rawLimit = Number(searchParams.get("limit") ?? 0);
+    const limit = rawLimit > 0 ? Math.min(rawLimit, 100) : 100;
 
     let products;
     if (id || slug) {
@@ -18,10 +31,12 @@ export async function GET(req: NextRequest) {
       if (!product) {
         return NextResponse.json({ error: "Product not found", source: "neon" }, { status: 404 });
       }
-      return NextResponse.json({ product, source: "neon" });
-    } else if (flashSale === 'true') {
+      const res = NextResponse.json({ product, source: "neon" });
+      res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
+      return res;
+    } else if (flashSale === "true") {
       products = await productsRepo.getFlashSale();
-    } else if (featured === 'true') {
+    } else if (featured === "true") {
       products = await productsRepo.getFeatured();
     } else if (category) {
       products = await productsRepo.getByCategory(category);
@@ -29,23 +44,26 @@ export async function GET(req: NextRequest) {
       products = await productsRepo.getAll();
     }
 
-    return NextResponse.json({ products, total: products.length, source: "neon" });
+    const paginated = products.slice(0, limit);
+    const res = NextResponse.json({ products: paginated, total: products.length, source: "neon" });
+    res.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
+    return res;
   } catch (error) {
-    console.error('Products API error:', error);
+    console.error("Products API error:", error);
     return NextResponse.json({ error: "Failed to fetch products", source: "neon" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdminDbUser();
+    await verifyAdminJwt();
     const body = await req.json();
     const product = await productsRepo.create(body);
     return NextResponse.json({ ...product, source: "neon" }, { status: 201 });
   } catch (error) {
-    console.error('Products POST error:', error);
+    console.error("Products POST error:", error);
     const message = error instanceof Error ? error.message : "Failed to create product";
-    const status = message.includes("Unauthorized") ? 401 : message.includes("Admin") ? 403 : 500;
+    const status = message.includes("Unauthorized") || message.includes("admin session") ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

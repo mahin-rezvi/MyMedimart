@@ -10,6 +10,8 @@ const PUBLIC_PATHS = [
   "/",
   "/sign-in",
   "/sign-up",
+  "/login",
+  "/register",
   "/admin-login",
   "/products",
   "/category",

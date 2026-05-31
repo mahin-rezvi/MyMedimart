@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const ADMIN_SESSION_SECRET = new TextEncoder().encode(
   process.env.ADMIN_SESSION_SECRET ?? "fallback-secret-change-in-production"
 );
 
 export async function POST(req: NextRequest) {
+  // Brute-force protection: max 5 attempts per 15 min per IP
+  const ip = getClientIp(req);
+  const rl = rateLimit(`admin-login:${ip}`, 5, 15 * 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+    );
+  }
+
   try {
     const body = await req.json();
     const { email, password } = body;

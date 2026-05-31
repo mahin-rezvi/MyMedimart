@@ -4,7 +4,7 @@ import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 
-export default function RegisterPage() {
+export default function SignUpPage() {
   return (
     <div className="w-full">
       {/* Header */}
@@ -25,8 +25,9 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      {/* Clerk SignUp Component */}
+      {/* Clerk SignUp — path must match the route this page lives at */}
       <SignUp
+        path="/sign-up"
         signInUrl="/sign-in"
         fallbackRedirectUrl="/"
         appearance={{

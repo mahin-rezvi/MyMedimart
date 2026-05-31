@@ -1,33 +1,34 @@
 "use client";
 
-import { SignUp } from "@clerk/nextjs";
+import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 
-export default function RegisterPage() {
+export default function SignInPage() {
   return (
     <div className="w-full">
       {/* Header */}
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-4 border border-brand-100 dark:border-brand-900">
           <Sparkles className="w-3 h-3" />
-          New member
+          Welcome back
         </div>
         <h1 className="font-display text-3xl font-black text-foreground leading-tight">
-          Create your<br />
-          <span className="text-brand-600">free account</span>
+          Sign in to your<br />
+          <span className="text-brand-600">account</span>
         </h1>
         <p className="text-muted-foreground text-sm mt-2">
-          Already have an account?{" "}
-          <Link href="/sign-in" className="text-brand-600 font-semibold hover:underline">
-            Sign in instead →
+          Don&apos;t have an account?{" "}
+          <Link href="/sign-up" className="text-brand-600 font-semibold hover:underline">
+            Create one free →
           </Link>
         </p>
       </div>
 
-      {/* Clerk SignUp Component */}
-      <SignUp
-        signInUrl="/sign-in"
+      {/* Clerk SignIn — path must match the route this page lives at */}
+      <SignIn
+        path="/sign-in"
+        signUpUrl="/sign-up"
         fallbackRedirectUrl="/"
         appearance={{
           elements: {

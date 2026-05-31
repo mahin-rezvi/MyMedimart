@@ -45,7 +45,7 @@ export default function ProductCard({ product, isFlashSale }: ProductCardProps) 
 
     if (!user) {
       toast.error("Sign in to save your cart");
-      router.push(`/login?redirect=${encodeURIComponent(productUrl)}`);
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(productUrl)}`);
       return;
     }
 

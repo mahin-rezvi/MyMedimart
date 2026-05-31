@@ -133,7 +133,7 @@ export default function AccountAddressesPage() {
         <div className="bg-card border border-border rounded-2xl p-6">
           <h1 className="font-display text-2xl font-bold">Saved Addresses</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to manage delivery addresses.</p>
-          <Link href="/login?redirect=/account/addresses" className="btn-primary inline-flex mt-4 px-4 py-2">Sign In</Link>
+          <Link href="/sign-in?redirect_url=/account/addresses" className="btn-primary inline-flex mt-4 px-4 py-2">Sign In</Link>
         </div>
       </div>
     );

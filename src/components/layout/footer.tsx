@@ -20,7 +20,7 @@ const FOOTER_LINKS = {
     { label: "FAQ", href: "/faq" },
   ],
   "My Account": [
-    { label: "Sign In", href: "/login" },
+    { label: "Sign In", href: "/sign-in" },
     { label: "My Orders", href: "/account/orders" },
     { label: "My Wishlist", href: "/account/wishlist" },
     { label: "Saved Addresses", href: "/account/addresses" },

@@ -19,7 +19,7 @@ export default function LoginPage() {
         </h1>
         <p className="text-muted-foreground text-sm mt-2">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-brand-600 font-semibold hover:underline">
+          <Link href="/sign-up" className="text-brand-600 font-semibold hover:underline">
             Create one free →
           </Link>
         </p>
@@ -28,7 +28,7 @@ export default function LoginPage() {
       {/* Clerk SignIn Component */}
       <SignIn
         path="/login"
-        signUpUrl="/register"
+        signUpUrl="/sign-up"
         fallbackRedirectUrl="/"
         appearance={{
           elements: {

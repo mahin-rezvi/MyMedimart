@@ -126,7 +126,7 @@ export default function AccountPage() {
           <div className="bg-card border border-border rounded-2xl p-6 mb-6">
             <h2 className="font-semibold text-lg">Sign in to manage your account</h2>
             <p className="text-sm text-muted-foreground mt-1">Your profile, order history, wishlist, and saved addresses appear here after login.</p>
-            <Link href="/login?redirect=/account" className="btn-primary inline-flex mt-4 px-4 py-2">
+            <Link href="/sign-in?redirect_url=/account" className="btn-primary inline-flex mt-4 px-4 py-2">
               Sign In
             </Link>
           </div>

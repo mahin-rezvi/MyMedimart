@@ -4,6 +4,15 @@ import { CheckCircle, Download, Package, Truck, Home, MessageCircle } from "luci
 import { formatPrice } from "@/lib/utils";
 import { ordersRepo } from "@/lib/db/repositories";
 
+/** Normalize any BD number to wa.me-compatible international format (no +) */
+function toWaMe(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("880")) return digits;
+  if (digits.startsWith("0")) return `88${digits}`;
+  if (digits.length === 10) return `880${digits}`;
+  return digits;
+}
+
 const TIMELINE = [
   { label: "Order Placed", done: true, icon: CheckCircle },
   { label: "Processing", done: true, icon: Package },
@@ -158,7 +167,7 @@ export default async function OrderConfirmedPage({ params }: { params: Promise<{
           <Package className="w-4 h-4" /> Track My Orders
         </Link>
         <a
-          href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "880"}?text=${encodeURIComponent(`Hi, I want to confirm my order ${orderNumber}`)}`}
+          href={`https://wa.me/${toWaMe(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "01873884089")}?text=${encodeURIComponent(`Hi, I want to confirm my order ${orderNumber}`)}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-1 flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold rounded-xl px-4 py-3 transition-colors"

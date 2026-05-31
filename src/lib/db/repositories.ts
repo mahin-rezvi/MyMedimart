@@ -225,7 +225,8 @@ export const productsRepo = {
        FROM products
        LEFT JOIN categories ON categories.id = products.category_id
        WHERE products.is_active = true
-       ORDER BY products.created_at DESC`
+       ORDER BY products.created_at DESC
+       LIMIT 500`
     );
     return rows.map(mapProduct);
   },
@@ -302,7 +303,8 @@ export const productsRepo = {
        FROM products
        LEFT JOIN categories ON categories.id = products.category_id
        WHERE products.is_flash_sale = true AND products.is_active = true
-       ORDER BY products.created_at DESC`
+       ORDER BY products.created_at DESC
+       LIMIT 50`
     );
     return rows.map(mapProduct);
   },
@@ -860,7 +862,7 @@ export const userAddressesRepo = {
 // Users Repository
 export const usersRepo = {
   async getAll(): Promise<User[]> {
-    return queryAll<User>("SELECT * FROM users ORDER BY created_at DESC");
+    return queryAll<User>("SELECT * FROM users ORDER BY created_at DESC LIMIT 500");
   },
 
   async getById(id: string): Promise<User | undefined> {
