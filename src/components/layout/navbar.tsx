@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   ShoppingCart, Search, Menu, X, Heart, ChevronDown,
-  Sun, Moon, Phone, Truck, Shield, RotateCcw, Zap,
+  Sun, Moon, Monitor, Phone, Truck, Shield, RotateCcw, Zap,
   Smartphone, Laptop, Shirt, Home, Pill, ShoppingBag,
   Cpu, Dumbbell, Baby, BookOpen, Utensils, Car, LogOut, User, Package,
 } from "lucide-react";
@@ -42,7 +42,7 @@ export default function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -228,13 +228,25 @@ export default function Navbar() {
 
             {/* Actions */}
             <div className="flex items-center gap-1 ml-auto">
-              {/* Theme */}
-              <button
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-              >
-                {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
+              {/* Theme toggle — cycles: light → dark → system */}
+              {mounted && (() => {
+                const nextTheme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+                const label = theme === "light" ? "Switch to dark" : theme === "dark" ? "Use system theme" : "Switch to light";
+                const Icon = resolvedTheme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
+                return (
+                  <button
+                    onClick={() => setTheme(nextTheme)}
+                    title={label}
+                    aria-label={label}
+                    className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative group"
+                  >
+                    <Icon className="w-4 h-4" />
+                    {theme === "system" && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-brand-500 rounded-full border border-white dark:border-gray-950" />
+                    )}
+                  </button>
+                );
+              })()}
 
               {/* Wishlist */}
               <Link href="/account/wishlist" className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
