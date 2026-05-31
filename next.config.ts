@@ -39,11 +39,15 @@ const nextConfig: NextConfig = {
           { key: "X-Powered-By", value: "" },
         ],
       },
-      {
-        // Aggressive caching for static assets
-        source: "/_next/static/:path*",
-        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
-      },
+      // Static asset long-cache — production only (Turbopack handles this in dev)
+      ...(process.env.NODE_ENV === "production"
+        ? [
+            {
+              source: "/_next/static/:path*",
+              headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+            },
+          ]
+        : []),
       {
         // Moderate caching for public images
         source: "/images/:path*",
