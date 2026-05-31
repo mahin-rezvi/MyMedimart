@@ -61,16 +61,24 @@ async function isValidAdminSession(req: NextRequest): Promise<boolean> {
 export const proxy = clerkMiddleware(async (auth, req: NextRequest) => {
   const { pathname } = req.nextUrl;
 
-  // ── Admin routes ──────────────────────────────────────────────────────────
-  if (pathname.startsWith("/admin")) {
-    // Public admin pages
-    if (pathname === "/admin-login" || pathname.startsWith("/api/admin/login") || pathname.startsWith("/api/admin/logout")) {
+  // ── Admin routes (both /admin UI and /api/admin API) ─────────────────────
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+    // Public admin endpoints — no auth needed
+    if (
+      pathname === "/admin-login" ||
+      pathname.startsWith("/api/admin/login") ||
+      pathname.startsWith("/api/admin/logout")
+    ) {
       return NextResponse.next();
     }
 
-    // Verify signed admin JWT cookie
+    // All other admin routes require a valid JWT cookie
     const valid = await isValidAdminSession(req);
     if (!valid) {
+      // API calls → 401 JSON, page requests → redirect to login
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Unauthorized: No admin session" }, { status: 401 });
+      }
       const res = NextResponse.redirect(new URL("/admin-login", req.url));
       res.cookies.delete("admin_jwt");
       return res;
